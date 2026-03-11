@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# To use this script easily, add the following alias to your .zshrc or .bashrc:
+#   alias dn='~/.local/bin/daily-note'
+
+# Discover the Obsidian vault by checking a few likely locations and
+# verifying the folder looks like a real vault (contains .obsidian).
+find_vault() {
+  local candidates=(
+    "$HOME/vaultimore"
+    "$HOME/documents/vaultimore"
+    "$HOME/Documents/vaultimore"
+  )
+  for candidate in "${candidates[@]}"; do
+    local resolved
+    resolved=$(realpath -e "$candidate" 2>/dev/null || true)
+    if [[ -n "$resolved" && -d "$resolved/.obsidian" ]]; then
+      echo "$resolved"
+      return
+    fi
+  done
+  echo "daily-note: could not find vaultimore vault" >&2
+  exit 1
+}
+
+# Resolve core paths for today's daily note inside the discovered vault.
+VAULT=$(find_vault)
+DAILY_DIR="$VAULT/daily"
+DATE=$(date +%Y-%m-%d)
+NOTE="$DAILY_DIR/$DATE.md"
+
+# Parse CLI flags and enable scratchpad mode when requested.
+SCRATCHPAD=false
+for arg in "$@"; do
+  case "$arg" in
+    --scratchpad|--s|-s) SCRATCHPAD=true ;;
+  esac
+done
+
+# Create today's note if missing, including parent directory and title header.
+if [[ ! -f "$NOTE" ]]; then
+  mkdir -p "$DAILY_DIR"
+  printf "# %s\n\n" "$DATE" > "$NOTE"
+fi
+
+# Launch editor in scratchpad terminal when requested; otherwise open normally.
+if $SCRATCHPAD; then
+  hyprctl dispatch exec "[workspace special:scratchpad silent] alacritty -e nvim '$NOTE'"
+else
+  exec nvim "$NOTE"
+fi
