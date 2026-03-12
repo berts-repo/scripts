@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
             CLEAN_LOG=1
             shift
             ;;
-        -d|--delete)
+        -r|--remove)
             DELETE_ORIGINALS=1
             shift
             ;;
@@ -84,7 +84,7 @@ fi
 
 # Validation: require at least one file/dir target.
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-    echo "Usage: archive [--dest <dir>] [--label <name>] [--clean-log] [-d] <file|dir>..." >&2
+    echo "Usage: archive [--dest <dir>] [--label <name>] [--clean-log] [-r] <file|dir>..." >&2
     exit 1
 fi
 
