@@ -14,8 +14,10 @@ DATE=$(date +%Y-%m-%d)
 LABEL=""
 TARGETS=()
 LOG_FILE="${HOME}/.archive.log"
+touch "$LOG_FILE"
 CLEAN_LOG=0
 DELETE_ORIGINALS=0
+LABEL_EXPLICIT=0
 
 # Parse positional targets and supported flags.
 while [[ $# -gt 0 ]]; do
@@ -26,6 +28,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --label)
             LABEL="$2"
+            LABEL_EXPLICIT=1
             shift 2
             ;;
         --clean-log)
@@ -86,6 +89,17 @@ if [[ -z "$LABEL" ]]; then
     LABEL="${LABEL:-archive}"
 fi
 
+if command -v realpath >/dev/null 2>&1; then
+    SOURCE_PATH=$(realpath "${TARGETS[0]}")
+else
+    SOURCE_PATH="$(cd "$(dirname "${TARGETS[0]}")" && pwd)/$(basename "${TARGETS[0]}")"
+fi
+
+if [[ $LABEL_EXPLICIT -eq 0 ]]; then
+    HASH=$(printf '%s' "$SOURCE_PATH" | shasum -a 256 | cut -c1-4)
+    LABEL="${LABEL}_${HASH}"
+fi
+
 # Ensure destination exists before creating the archive.
 mkdir -p "$DEST"
 
@@ -105,11 +119,6 @@ if [[ $DELETE_ORIGINALS -eq 1 ]]; then
     fi
 fi
 # Log format: <source_path>\t<archive_path>\t<datetime>\t<size>\t<sha256>
-if command -v realpath >/dev/null 2>&1; then
-    SOURCE_PATH=$(realpath "${TARGETS[0]}")
-else
-    SOURCE_PATH="$(cd "$(dirname "${TARGETS[0]}")" && pwd)/$(basename "${TARGETS[0]}")"
-fi
 DATETIME=$(date +%Y-%m-%dT%H:%M:%S)
 SIZE=$(du -sh "$ARCHIVE" | cut -f1)
 SHA256=$(shasum -a 256 "$ARCHIVE" | cut -d' ' -f1)
