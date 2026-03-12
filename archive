@@ -96,56 +96,47 @@ if [[ -n "$RESTORE_ARCHIVE" ]]; then
         exit 1
     fi
 
-    if [[ ! -f "$LOG_FILE" ]]; then
-        echo "Error: no log file found at $LOG_FILE" >&2
+    # Resolve the archive path — accept full path or bare filename (looked up in Tomb).
+    if [[ "$RESTORE_ARCHIVE" != */* ]]; then
+        RESTORE_ARCHIVE="${DEST}/${RESTORE_ARCHIVE}"
+    fi
+    if [[ ! -f "$RESTORE_ARCHIVE" ]]; then
+        echo "Error: archive file not found: $RESTORE_ARCHIVE" >&2
         exit 1
     fi
 
+    # If --destination is given, skip log lookup entirely.
+    if [[ $DEST_EXPLICIT -eq 1 ]]; then
+        mkdir -p "$DEST"
+        tar -xzf "$RESTORE_ARCHIVE" -C "$DEST"
+        echo "Restored $RESTORE_ARCHIVE to $DEST"
+        exit 0
+    fi
+
+    # Try log lookup for original source path.
     MATCH_SOURCE=""
-    MATCH_ARCHIVE=""
-    if [[ "$RESTORE_ARCHIVE" == */* ]]; then
+    if [[ -f "$LOG_FILE" ]]; then
         while IFS=$'\t' read -r SOURCE_PATH ARCHIVE_PATH REST; do
             if [[ "$ARCHIVE_PATH" == "$RESTORE_ARCHIVE" ]]; then
                 MATCH_SOURCE="$SOURCE_PATH"
-                MATCH_ARCHIVE="$ARCHIVE_PATH"
                 break
             fi
         done < "$LOG_FILE"
+    fi
+
+    if [[ -n "$MATCH_SOURCE" ]]; then
+        SOURCE_PARENT="$(dirname "$MATCH_SOURCE")"
+        if [[ -d "$SOURCE_PARENT" ]]; then
+            tar -xzf "$RESTORE_ARCHIVE" -C "$SOURCE_PARENT"
+            echo "Restored $RESTORE_ARCHIVE to $SOURCE_PARENT"
+            exit 0
+        fi
+        echo "Warning: original destination does not exist: $SOURCE_PARENT" >&2
     else
-        while IFS=$'\t' read -r SOURCE_PATH ARCHIVE_PATH REST; do
-            if [[ "$(basename "$ARCHIVE_PATH")" == "$RESTORE_ARCHIVE" ]]; then
-                MATCH_SOURCE="$SOURCE_PATH"
-                MATCH_ARCHIVE="$ARCHIVE_PATH"
-                break
-            fi
-        done < "$LOG_FILE"
+        echo "Warning: no log entry found for $(basename "$RESTORE_ARCHIVE")" >&2
     fi
 
-    if [[ -z "$MATCH_ARCHIVE" || -z "$MATCH_SOURCE" ]]; then
-        echo "Error: no log entry found for archive: $RESTORE_ARCHIVE" >&2
-        exit 1
-    fi
-    if [[ ! -f "$MATCH_ARCHIVE" ]]; then
-        echo "Error: archive file not found: $MATCH_ARCHIVE" >&2
-        exit 1
-    fi
-
-    SOURCE_PARENT="$(dirname "$MATCH_SOURCE")"
-    if [[ -d "$SOURCE_PARENT" ]]; then
-        tar -xzf "$MATCH_ARCHIVE" -C "$SOURCE_PARENT"
-        echo "Restored $MATCH_ARCHIVE to $SOURCE_PARENT"
-        exit 0
-    fi
-
-    if [[ $DEST_EXPLICIT -eq 1 ]]; then
-        mkdir -p "$DEST"
-        tar -xzf "$MATCH_ARCHIVE" -C "$DEST"
-        echo "Restored $MATCH_ARCHIVE to $DEST"
-        exit 0
-    fi
-
-    echo "Warning: original destination does not exist: $SOURCE_PARENT" >&2
-    echo "Re-run with --destination <dir> to specify where to extract." >&2
+    echo "Re-run with -d <dir> to specify where to extract." >&2
     exit 1
 fi
 
