@@ -97,14 +97,14 @@ fi
 
 if [[ $LABEL_EXPLICIT -eq 0 ]]; then
     HASH=$(printf '%s' "$SOURCE_PATH" | shasum -a 256 | cut -c1-4)
-    LABEL="${LABEL}_${HASH}"
 fi
 
 # Ensure destination exists before creating the archive.
 mkdir -p "$DEST"
 
 # Create a date-prefixed tarball and print its output path for callers.
-ARCHIVE="${DEST}/${DATE}_${LABEL}.tar.gz"
+# Format: YYYY-MM-DD_<hash>_<label>.tar.gz — hash after date groups by source dir.
+ARCHIVE="${DEST}/${DATE}_${HASH:+${HASH}_}${LABEL}.tar.gz"
 tar -czf "$ARCHIVE" -- "${TARGETS[@]}"
 # Verify archive readability before deleting originals when --delete is requested.
 if [[ $DELETE_ORIGINALS -eq 1 ]]; then
