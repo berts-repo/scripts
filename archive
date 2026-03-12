@@ -13,6 +13,8 @@ DEST="${HOME}/tomb"
 DATE=$(date +%Y-%m-%d)
 LABEL=""
 TARGETS=()
+LOG_FILE="${HOME}/.archive.log"
+CLEAN_LOG=0
 
 # Parse positional targets and supported flags.
 while [[ $# -gt 0 ]]; do
@@ -24,6 +26,10 @@ while [[ $# -gt 0 ]]; do
         --label)
             LABEL="$2"
             shift 2
+            ;;
+        --clean-log)
+            CLEAN_LOG=1
+            shift
             ;;
         --)
             shift
@@ -41,9 +47,27 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Cleanup mode: remove log entries whose archive path no longer exists.
+if [[ $CLEAN_LOG -eq 1 ]]; then
+    REMOVED=0
+    if [[ -f "$LOG_FILE" ]]; then
+        TMP_LOG=$(mktemp)
+        while IFS=$'\t' read -r SOURCE_PATH ARCHIVE_PATH; do
+            if [[ -n "${ARCHIVE_PATH:-}" && -e "$ARCHIVE_PATH" ]]; then
+                printf '%s\t%s\n' "$SOURCE_PATH" "$ARCHIVE_PATH" >> "$TMP_LOG"
+            else
+                ((REMOVED+=1))
+            fi
+        done < "$LOG_FILE"
+        mv "$TMP_LOG" "$LOG_FILE"
+    fi
+    echo "Removed $REMOVED entries"
+    exit 0
+fi
+
 # Validation: require at least one file/dir target.
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-    echo "Usage: archive [--dest <dir>] [--label <name>] <file|dir>..." >&2
+    echo "Usage: archive [--dest <dir>] [--label <name>] [--clean-log] <file|dir>..." >&2
     exit 1
 fi
 
@@ -59,4 +83,11 @@ mkdir -p "$DEST"
 # Create a date-prefixed tarball and print its output path for callers.
 ARCHIVE="${DEST}/${DATE}_${LABEL}.tar.gz"
 tar -czf "$ARCHIVE" -- "${TARGETS[@]}"
+# Log format: <absolute_source_path>\t<full_archive_path>
+if command -v realpath >/dev/null 2>&1; then
+    SOURCE_PATH=$(realpath "${TARGETS[0]}")
+else
+    SOURCE_PATH="$(cd "$(dirname "${TARGETS[0]}")" && pwd)/$(basename "${TARGETS[0]}")"
+fi
+printf '%s\t%s\n' "$SOURCE_PATH" "$ARCHIVE" >> "$LOG_FILE"
 echo "$ARCHIVE"
