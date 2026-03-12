@@ -23,17 +23,24 @@ LOG_FILE="${DEST}/.archive.log"
 CLEAN_LOG=0
 DELETE_ORIGINALS=0
 LABEL_EXPLICIT=0
+RESTORE_ARCHIVE=""
+DEST_EXPLICIT=0
 
 # Parse positional targets and supported flags.
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --dest)
+        -d|--destination)
             DEST="$2"
+            DEST_EXPLICIT=1
             shift 2
             ;;
         --label)
             LABEL="$2"
             LABEL_EXPLICIT=1
+            shift 2
+            ;;
+        --restore)
+            RESTORE_ARCHIVE="$2"
             shift 2
             ;;
         --clean-log)
@@ -82,9 +89,69 @@ if [[ $CLEAN_LOG -eq 1 ]]; then
     exit 0
 fi
 
+# Restore mode: extract an archived entry back to its source parent (or explicit destination).
+if [[ -n "$RESTORE_ARCHIVE" ]]; then
+    if [[ ${#TARGETS[@]} -gt 0 ]]; then
+        echo "Error: --restore cannot be combined with archive targets." >&2
+        exit 1
+    fi
+
+    if [[ ! -f "$LOG_FILE" ]]; then
+        echo "Error: no log file found at $LOG_FILE" >&2
+        exit 1
+    fi
+
+    MATCH_SOURCE=""
+    MATCH_ARCHIVE=""
+    if [[ "$RESTORE_ARCHIVE" == */* ]]; then
+        while IFS=$'\t' read -r SOURCE_PATH ARCHIVE_PATH REST; do
+            if [[ "$ARCHIVE_PATH" == "$RESTORE_ARCHIVE" ]]; then
+                MATCH_SOURCE="$SOURCE_PATH"
+                MATCH_ARCHIVE="$ARCHIVE_PATH"
+                break
+            fi
+        done < "$LOG_FILE"
+    else
+        while IFS=$'\t' read -r SOURCE_PATH ARCHIVE_PATH REST; do
+            if [[ "$(basename "$ARCHIVE_PATH")" == "$RESTORE_ARCHIVE" ]]; then
+                MATCH_SOURCE="$SOURCE_PATH"
+                MATCH_ARCHIVE="$ARCHIVE_PATH"
+                break
+            fi
+        done < "$LOG_FILE"
+    fi
+
+    if [[ -z "$MATCH_ARCHIVE" || -z "$MATCH_SOURCE" ]]; then
+        echo "Error: no log entry found for archive: $RESTORE_ARCHIVE" >&2
+        exit 1
+    fi
+    if [[ ! -f "$MATCH_ARCHIVE" ]]; then
+        echo "Error: archive file not found: $MATCH_ARCHIVE" >&2
+        exit 1
+    fi
+
+    SOURCE_PARENT="$(dirname "$MATCH_SOURCE")"
+    if [[ -d "$SOURCE_PARENT" ]]; then
+        tar -xzf "$MATCH_ARCHIVE" -C "$SOURCE_PARENT"
+        echo "Restored $MATCH_ARCHIVE to $SOURCE_PARENT"
+        exit 0
+    fi
+
+    if [[ $DEST_EXPLICIT -eq 1 ]]; then
+        mkdir -p "$DEST"
+        tar -xzf "$MATCH_ARCHIVE" -C "$DEST"
+        echo "Restored $MATCH_ARCHIVE to $DEST"
+        exit 0
+    fi
+
+    echo "Warning: original destination does not exist: $SOURCE_PARENT" >&2
+    echo "Re-run with --destination <dir> to specify where to extract." >&2
+    exit 1
+fi
+
 # Validation: require at least one file/dir target.
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-    echo "Usage: archive [--dest <dir>] [--label <name>] [--clean-log] [-r] <file|dir>..." >&2
+    echo "Usage: archive [-d|--destination <dir>] [--label <name>] [--clean-log] [--restore <archive>] [-r] <file|dir>..." >&2
     exit 1
 fi
 
