@@ -9,7 +9,7 @@ set -euo pipefail
 # Add the alias to ~/.zshrc or ~/.bashrc, then reload your shell.
 
 # Defaults/constants: destination directory, date stamp, optional label, and target list.
-DEST="${HOME}/tomb"
+DEST="${HOME}/Tomb"
 DATE=$(date +%Y-%m-%d)
 LABEL=""
 TARGETS=()
