@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Install as `archive` command:
+# 1) Symlink (recommended if path is stable):
+#    ln -s "$(pwd)/archive" /usr/local/bin/archive
+# 2) Shell alias (per-shell config):
+#    alias archive='/path/to/scripts/archive'
+# Add the alias to ~/.zshrc or ~/.bashrc, then reload your shell.
+
+# Defaults/constants: destination directory, date stamp, optional label, and target list.
 DEST="${HOME}/tomb"
 DATE=$(date +%Y-%m-%d)
 LABEL=""
 TARGETS=()
 
+# Parse positional targets and supported flags.
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dest)
@@ -32,18 +41,22 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Validation: require at least one file/dir target.
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
     echo "Usage: archive [--dest <dir>] [--label <name>] <file|dir>..." >&2
     exit 1
 fi
 
+# Derive a default label from the first target when none is supplied.
 if [[ -z "$LABEL" ]]; then
     LABEL=$(basename "${TARGETS[0]}")
     LABEL="${LABEL:-archive}"
 fi
 
+# Ensure destination exists before creating the archive.
 mkdir -p "$DEST"
 
+# Create a date-prefixed tarball and print its output path for callers.
 ARCHIVE="${DEST}/${DATE}_${LABEL}.tar.gz"
 tar -czf "$ARCHIVE" -- "${TARGETS[@]}"
 echo "$ARCHIVE"
