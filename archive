@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEST="${HOME}/tomb"
+DATE=$(date +%Y-%m-%d)
+LABEL=""
+TARGETS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dest)
+            DEST="$2"
+            shift 2
+            ;;
+        --label)
+            LABEL="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            TARGETS+=("$@")
+            break
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            TARGETS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [[ ${#TARGETS[@]} -eq 0 ]]; then
+    echo "Usage: archive [--dest <dir>] [--label <name>] <file|dir>..." >&2
+    exit 1
+fi
+
+if [[ -z "$LABEL" ]]; then
+    LABEL=$(basename "${TARGETS[0]}")
+    LABEL="${LABEL:-archive}"
+fi
+
+mkdir -p "$DEST"
+
+ARCHIVE="${DEST}/${DATE}_${LABEL}.tar.gz"
+tar -czf "$ARCHIVE" -- "${TARGETS[@]}"
+echo "$ARCHIVE"
