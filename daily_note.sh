@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# To use this script easily, add the following alias to your .zshrc or .bashrc:
-#   alias dn='~/.local/bin/daily-note'
+# To use this script easily:
+#   1. Symlink it:  ln -s /path/to/daily_note ~/.local/bin/daily_note
+#   2. Add alias:   echo "alias dn='~/.local/bin/daily_note'" >> ~/.zshrc
+#   3. Reload:      source ~/.zshrc
 
 # Discover the Obsidian vault by checking a few likely locations and
 # verifying the folder looks like a real vault (contains .obsidian).
@@ -14,13 +16,20 @@ find_vault() {
   )
   for candidate in "${candidates[@]}"; do
     local resolved
-    resolved=$(realpath -e "$candidate" 2>/dev/null || true)
+    if [[ -d "$candidate" ]]; then
+      if command -v realpath >/dev/null 2>&1; then
+        resolved=$(realpath "$candidate" 2>/dev/null || true)
+      fi
+      if [[ -z "${resolved:-}" ]]; then
+        resolved=$(cd "$candidate" 2>/dev/null && pwd || true)
+      fi
+    fi
     if [[ -n "$resolved" && -d "$resolved/.obsidian" ]]; then
       echo "$resolved"
       return
     fi
   done
-  echo "daily-note: could not find vaultimore vault" >&2
+  echo "daily_note: could not find vaultimore vault" >&2
   exit 1
 }
 
@@ -34,19 +43,23 @@ NOTE="$DAILY_DIR/$DATE.md"
 SCRATCHPAD=false
 for arg in "$@"; do
   case "$arg" in
-    --scratchpad|--s|-s) SCRATCHPAD=true ;;
+  --scratchpad | --s | -s) SCRATCHPAD=true ;;
   esac
 done
 
 # Create today's note if missing, including parent directory and title header.
 if [[ ! -f "$NOTE" ]]; then
   mkdir -p "$DAILY_DIR"
-  printf "# %s\n\n" "$DATE" > "$NOTE"
+  printf "# %s\n\n" "$DATE" >"$NOTE"
 fi
 
 # Launch editor in scratchpad terminal when requested; otherwise open normally.
 if $SCRATCHPAD; then
-  hyprctl dispatch exec "[workspace special:scratchpad silent] alacritty -e nvim '$NOTE'"
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    exec nvim "$NOTE"
+  else
+    hyprctl dispatch exec "[workspace special:scratchpad silent] alacritty -e nvim '$NOTE'"
+  fi
 else
   exec nvim "$NOTE"
 fi
